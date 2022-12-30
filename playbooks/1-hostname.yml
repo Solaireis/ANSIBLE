@@ -1,0 +1,17 @@
+- name: "Server configuration"
+  hosts: linux
+
+  tasks:
+  - name: "What is my inventory hostname"
+    anisble.builtin.debug:
+      var:hostname
+  
+  - name: "What is my ansible hostname"
+    ansible.builtin.debug:
+      var: ansible_hostname
+    
+  - name: "Configure the hostnames"
+    hostname:
+      name: "{{hostname}}"
+    when: ansible_hostname != hostname
+    
