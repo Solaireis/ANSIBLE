@@ -1,3 +1,3 @@
 # ANSIBLE
 ## Automation play book scripts
-1. MODULE C 2022 KOREA
+Runs on python modules, used to automate machines to do stuffs
