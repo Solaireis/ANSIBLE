@@ -1,0 +1,17 @@
+- name: 1-hostname
+  hosts: linux
+
+  tasks:
+  - name: Set hostname of machine
+    ansible.builtin.hostname: 
+      name: "{{ hostvars[inventory_hostname]['hostname'] }}"
+    when: hostvar[inventory_hostname]['ansible_facts']['hostname'] == "debian"
+
+  # WSS Teacher Solution:
+  # Cher used the idea of inventory hostname /etc/ansible/hosts to rename the hostname 
+  # instead of using our own method
+
+  #notice how the conditionals uses ansible_facts, this checks whether the hostname from the hostmachine matches debian
+  #when debian machines are factory reset their names become debian
+  # interesting isnt it?
+  
