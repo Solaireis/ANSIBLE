@@ -1,0 +1,47 @@
+- name: 3-dns-server
+  hosts: dns
+
+  tasks: 
+  - name: check if master config exists
+    stat:
+      path: /etc/bind/master
+    register: master_file
+
+  - name: check if include config exists
+    stat:
+      path: /etc/bind/
+    register: option
+  
+  - name: check if A records already exists
+    stat:
+      path: /etc/bind/
+    register: a_records
+
+  - name: check if ptr records already exists
+    stat:
+      path: /etc/bind/
+    register: ptr_records
+
+  - name: check if file exists
+    stat:
+      path: /var/cache/bind
+    register: slave_file
+
+  - name: install bind 9 config on the first hostmachine  
+    ansible.builtin.copy:
+      src: /etc/bind/master
+      dest: /etc/bind/master
+      mode: "0777"
+      own: bind
+      group: bind
+    when: 
+
+  - name: install bind 9 slave on the first hostmachine  
+    ansible.builtin.copy:
+      src: /etc/bind/slave
+      dest: /var/cache/bind
+      mode: "0777"
+      own: bind
+      group: bind
+      when:
+  
