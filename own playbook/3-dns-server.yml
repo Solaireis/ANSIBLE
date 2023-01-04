@@ -39,9 +39,14 @@
   - name: install bind 9 slave on the first hostmachine  
     ansible.builtin.copy:
       src: /etc/bind/slave
-      dest: /var/cache/bind
+      dest: /etc/bind/slave
       mode: "0777"
       own: bind
       group: bind
       when:
+  
+  - name: apply changes 
+    shell: |
+      systemctl restart named
+    when:
   
