@@ -1,42 +1,53 @@
 # 2-nftables.yml
 
-name: 2-nftables 
-hosts: linux
-tasks:
-- name: Directory exists
-  stat:
-    path: /etc/nftables/ 
-  register: directory_name
+- name: 2-nftables 
+  hosts: linux
+  tasks:
+  - name: Directory exists
+    stat:
+      path: /etc/nftables/ 
+    register: directory_name
 
-- name: check if script exist 
-  stat:
-    path: /etc/nftables/script.nft 
-  register: script_name
+  - name: check if script exist 
+    stat:
+      path: /etc/nftables/script.nft 
+    register: script_name
 
-- name: disable ip tables 
-  shell: |
-    systemctl disable iptables 
-    systemctl stop iptables
-    systemctl enable nftables
-    mkdir /etc/nftables/
-    echo 'include "/etc/nftables/script.nft" >> /etc/nftables.conf 
-  when: not directory_name.stat.exists
-  
-- name: set nftable rules
-  shell: |
-    nft add table inet trusted_table
-    nft add set inet trusted_table trusted { type ipv4_addr\; } 
-    nft add element inet trusted_table trusted {10.22.0.50, 10.22.0.251, 10.22.0.252 } 
-    nft add rule inet trusted_table input ip protocol icmp ip saddr @trusted accept 
-    nft add rule inet trusted_table input tcp dport 22 ip saddr @trusted accept
-    nft add rule tcp dport { http, https } ip saddr @trusted accept
-    nft add rule udp dport { http, https } ip saddr @trusted accept
-    nft add rule ip saddr ! = @trusted drop
-  when: not script_name.stat.exists
+  - name: disable ip tables 
+    shell: |
+      systemctl disable iptables 
+      systemctl stop iptables
+      systemctl enable nftables
+      mkdir /etc/nftables/
+      echo 'include "/etc/nftables/script.nft" >> /etc/nftables.conf 
+    when: not directory_name.stat.exists
+    
+  - name: set nftable rules
+    shell: |
+      nft add table inet trusted_table
+      nft add set inet trusted_table trusted { type ipv4_addr\; } 
+      nft add element inet trusted_table trusted {10.22.0.50, 10.22.0.251, 10.22.0.252 } 
+      nft add chain inet trusted_table input { type filter hook input priority 0 \;}
+      nft add rule inet trusted_table input ip protocol icmp ip saddr @trusted accept 
+      nft add rule inet trusted_table input tcp dport 22 ip saddr @trusted accept
+      nft add rule inet trusted_table input tcp dport { http, https } 
+      nft add rule inet trusted_table input udp dport { http, https } 
+      nft add rule inet trusted_table input tcp dport 53 #dns server
+      nft add rule inet trusted_table input tcp dport 8081 #web server
+      nft add rule inet trusted_table input tcp dport 8000 
+      nft add rule inet trusted_table input tcp dport 2049
+      nft add rule inet trusted_table input udp dport 53 
+      nft add rule inet trusted_table input udp dport 2049 #nfs server
+      nft add rule inet trusted_table input udp dport 8081 
+      nft add rule inet trusted_table input udp dport 8000 
+      nft add rule inet trusted_table input tcp dport 111 #nfs server
+      nft add rule inet trusted_table input udp dport 111
+      nft add rule inet trusted_table input ip saddr ! = @trusted drop
+    when: not script_name.stat.exists
 
-- name: copy script file 
-  ansible.builtin.copy:
-    src: /etc/nftables/script.nft 
-    dest: /etc/nftables/script.nft 
-    mode: "0777"
+  - name: copy script file 
+    ansible.builtin.copy:
+      src: /etc/nftables/script.nft 
+      dest: /etc/nftables/script.nft 
+      mode: "0777"
   when: not script_name.stat.exists

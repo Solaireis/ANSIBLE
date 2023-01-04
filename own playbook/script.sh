@@ -14,6 +14,16 @@ table inet trusted_table {
 							tcp dport 22 ip saddr @trusted accept
 							tcp dport {  http, https } ip saddr @trusted accept
 							udp dport {  http, https } ip saddr @trusted accept
+							tcp dport 2049 ip saddr @trusted accept
+							tcp dport 8081 ip saddr @trusted accept
+							tcp dport 8000 ip saddr @trusted accept
+							tcp dport 53 ip saddr @trusted accept
+							udp dport 53 ip saddr @trusted accept
+							udp dport 2049 ip saddr @trusted accept
+							udp dport 8081 ip saddr @trusted accept
+							udp dport 8000 ip saddr @trusted accept
+							udp dport 111 ip saddr @trusted accept
+							tcp dport 111 ip saddr @trusted accept
 							ip saddr != @trusted drop
 				}
 	
