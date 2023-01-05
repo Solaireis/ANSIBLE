@@ -51,3 +51,20 @@
       dest: /etc/nftables/script.nft 
       mode: "0777"
   when: not script_name.stat.exists
+
+
+  # you can actually js override the original /etc/nftables.conf
+  # this is a best practice to not have unecessary configuration files inside the remote hosts machines
+  # - name: disable ip tables 
+  #   shell: |
+  #     systemctl disable iptables 
+  #     systemctl stop iptables
+  #     systemctl enable nftables
+  #   when: not directory_name.stat.exists
+
+  # - name: copy script file 
+  #   ansible.builtin.copy:
+  #     src: /etc/nftables/script.nft 
+  #     dest: /etc/nftables.conf 
+  #     mode: "0777"
+  # when: not script_name.stat.exists
