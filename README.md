@@ -24,7 +24,7 @@ brew install ansible
 ```
 ansible --version
 ansible-playbook playbook.yml
-
+```
 
 ## Automation play book scripts
 Runs on python modules, used to automate machines to do stuffs
