@@ -26,6 +26,7 @@
     - applix.com.lan.
     - named.conf.master
     when: (groups['dns'][0] == inventory_hostname) and (not master_file.stat.exists)
+    
   - name: append to the bind options for slave
     shell: |
       echo "include \"/etc/bind/named.conf.slave\";" >> /etc/bind/named.conf
