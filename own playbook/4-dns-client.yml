@@ -1,0 +1,27 @@
+- name: 4-dns-server
+  hosts: linux
+
+  tasks: 
+  - name: dns_done file check
+    stat:
+      path: /root/dns_done
+    register: dns_done
+  
+  - name: add dns nameservers
+    ansible.builtin.copy:
+      src: '/data/ansible/linux/resolv.conf'
+      dest: '/etc/resolv.conf'
+      owner: root
+      group: root
+      mode: 0777
+    when: not dns_done.stat.exists
+
+  - name: add dns nameservers to the network interfaces
+    shell: |
+      echo"   dns-search applix.com" >> /etc/network/interfaces
+      echo"   dns-server 10.22.0.2" >> /etc/network/interfaces
+      echo"   dns-server 10.22.0.3" >> /etc/network/interfaces
+      echo"   dns-server 10.22.0.4" >> /etc/network/interfaces
+      echo"   dns-server 10.22.0.5" >> /etc/network/interfaces
+      touch /root/dns_done
+    when: not dns_done.stat.exists
