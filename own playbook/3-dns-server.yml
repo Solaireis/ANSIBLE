@@ -4,49 +4,47 @@
   tasks: 
   - name: check if master config exists
     stat:
-      path: /etc/bind/master
+      path: /etc/bind/named.conf.master
     register: master_file
 
-  - name: check if include config exists
+  - name: check if slave_file config exists
     stat:
-      path: /etc/bind/
-    register: option
-  
-  - name: check if A records already exists
-    stat:
-      path: /etc/bind/
-    register: a_records
-
-  - name: check if ptr records already exists
-    stat:
-      path: /etc/bind/
-    register: ptr_records
-
-  - name: check if file exists
-    stat:
-      path: /var/cache/bind
+      path: /etc/bind/named.conf.slave
     register: slave_file
 
-  - name: install bind 9 config on the first hostmachine  
-    ansible.builtin.copy:
-      src: /etc/bind/master
-      dest: /etc/bind/master
-      mode: "0777"
-      own: bind
+  - name: send master files
+    copy:
+      src: '/data/ansible/linux/{{item}}'
+      dest: '/etc/bind'
+      owner: bind
       group: bind
-    when: 
+      mode: 0777
+    loop:
+    - named.conf.options
+    - named.conf
+    - 0.22.10.db
+    - applix.com.lan.
+    - named.conf.master
+    when: (groups['dns'][0] == inventory_hostname) and (not master_file.stat.exists)
+  - name: append to the bind options for slave
+    shell: |
+      echo "include \"/etc/bind/named.conf.slave\";" >> /etc/bind/named.conf
+    when: (groups['dns'][0] != inventory_hostname) and (not slave_file.stat.exists)
 
-  - name: install bind 9 slave on the first hostmachine  
-    ansible.builtin.copy:
-      src: /etc/bind/slave
-      dest: /etc/bind/slave
-      mode: "0777"
-      own: bind
+  - name: send slave files
+    copy:
+      src: '/data/ansible/linux/{{item}}'
+      dest: '/etc/bind'
+      owner: bind
       group: bind
-      when:
-  
-  - name: apply changes 
+      mode: 0777
+    loop:
+    - named.conf.slave
+    when: (groups['dns'][0] != inventory_hostname) and (not slave_file.stat.exists)
+
+  - name: update all bind configuration
     shell: |
       systemctl restart named
-    when:
+    when: ((groups['dns'][0] == inventory_hostname) and (not master_file.stat.exists)) or (groups['dns'][0] != inventory_hostname) and (not slave_file.stat.exists)
+    
   
