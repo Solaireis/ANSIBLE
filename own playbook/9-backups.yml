@@ -1,1 +1,69 @@
 # a glimpse to smth exciting : )
+- name: 9-backup.yml 
+  hosts: dns:backup
+  gather_facts: True
+
+  tasks:
+  - name: check if master configuration file exists
+    stat:
+      path: /root/master_backup.sh
+    register: master_file
+  
+  - name: check if slave configuration file exists
+    stat:
+      path: /root/slave_backup.sh
+    register: slave_file
+
+  - name: check if backup folder exists
+    stat:
+      path: /root/backups/
+    register: backup
+
+  - name: check if dns backup is done
+    stat:
+      path: /root/backupdone
+    register: folder
+  
+  - name: check if its the first machine in the dns group and then copy the file
+    copy:
+      src: '/data/ansible/linux/{{item}}'
+      dest: '/root'
+      owner: root
+      group: root
+      mode: 0777
+    loop: 
+      - backup_dns.timer
+      - backup_dns.service
+      - master_backup.sh
+    when: (groups['dns'][0] == inventory_hostname) and ( not master_file.stat.exists)
+
+  - name: check if its the slave machines in the dns group and then copy the slave_files
+    copy:
+      src: '/data/ansible/linux/{{item}}'
+      dest: '/root'
+      owner: root
+      group: root
+      mode: 0777
+    loop: 
+      - backup_dns.timer
+      - slave_backup_dns.service
+      - slave_backup.sh
+    when: ((groups['dns'][0] != inventory_hostname and groups['backup'][0] != inventory_hostname)) and ( not slave_file.stat.exists)
+
+  - name: push backup folders
+    shell: |
+      mkdir -p /root/backups/
+      mkdir -p /root/backups/master/
+      mkdir -p /root/backups/slave/
+    when: (groups['backup'][0] == inventory_hostname) and (not folder.stat.exists)
+
+  - name: push the systemd files
+    shell: |
+      cp /root/backup_dns.* /etc/systemd/system/
+      systemctl daemon-reload
+      systemctl enable backup_dns.service
+      systemctl enable backup_dns.timer
+      systemctl start backup_dns.service
+      systemctl start backup_dns.timer
+      touch /root/backupdone
+    when: (groups['backup'][0] != inventory_hostname) and ( not backup.stat.exists)

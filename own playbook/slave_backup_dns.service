@@ -1,0 +1,12 @@
+[Unit]
+Description=Backup DNS Services
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=root
+ExecStart=/root/slave_backup.sh
+
+[Install]
+WantedBy=multi-user.target

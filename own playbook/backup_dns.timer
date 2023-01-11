@@ -1,0 +1,10 @@
+[Unit]
+Description= Timer to run the backup services for the DNS
+
+[Timer]
+OnBootSec=0
+OnUnitActiveSec=5min
+Unit=backup_dns.service
+
+[Install]
+WantedBy=multi-user.target
