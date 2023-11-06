@@ -7,30 +7,20 @@ The Config here is outdated, optimised versions of my playbooks are privated for
 Hence im unlocking this repository
 
 
-## What is Ansible?
-Ansible is a configuration management tool, it is used to automate the configuration of machines.
-## How does it work?
-Ansible uses SSH to connect to machines and run commands on them.
-## How to install Ansible?
-### On Ubuntu
-```
-sudo apt-get update
-sudo apt-get install software-properties-common
-sudo apt-add-repository ppa:ansible/ansible
-sudo apt-get update
-sudo apt-get install ansible
-```
-### On Mac
-```
-brew install ansible
-```
-## How to use Ansible?
-### Ansible commands
-```
-ansible --version
-ansible-playbook playbook.yml
-```
+### How to Install
+```bash
+aptitude install ansible
 
-## Automation play book scripts
-Runs on python modules, used to automate machines to do stuffs
-jinja2 syntax to check on variables
+
+# Make the hostfile directory
+mkdir /etc/ansible/
+vi hosts
+...
+
+# Add the  Playbooks
+mkdir -p /data/ansible/linux
+vi 1-hostname.yml
+...
+
+```
+You may refer to redhat for better documentation
