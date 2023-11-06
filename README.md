@@ -2,6 +2,11 @@
 ## NOTE:
 This is for self learning and education purposes, not for commercial use.
 Password use here are for learning purposes and are not indicative of actual real world machines
+
+The Config here is outdated, optimised versions of my playbooks are privated for competition reasons
+Hence im unlocking this repository
+
+
 ## What is Ansible?
 Ansible is a configuration management tool, it is used to automate the configuration of machines.
 ## How does it work?
