@@ -1,0 +1,110 @@
+all:
+  hosts:
+      #Linux Hosts
+      LIN1:
+        ansible_host: 192.168.0.10
+        hostname: "WSS2023-LINUXHOST-001"
+        webcolor: "blue"
+      LIN2:
+        ansible_host: 192.168.0.2
+        hostname: "WSS2023-LINUXHOST-002"
+        webcolor: "green"
+      LIN3:
+        ansible_host: 192.168.0.3
+        hostname: "WSS2023-LINUXHOST-003"
+        webcolor: "yellow"  
+      #Windows Hosts
+      WIN1:
+        ansible_host: 192.168.0.101
+        hostname: "WSS2023DC001"
+        RootCAPriv: true
+      WIN2:
+        ansible_host: 192.168.0.102
+        hostname: "WSS2023HOST002"
+        RootCAPriv: false
+      WIN3:
+        ansible_host: 192.168.0.103
+        hostname: "WSS2023HOST003"
+        RootCAPriv: false
+      #Cisco Hosts
+      RTR1:
+        ansible_host: 192.168.0.201
+        hostname: "wss2023-rtr1"
+        loopback0_IP: 10.22.0.201
+        loopback0_MASK: 255.255.255.255
+        dhcp_relay_interface:
+          - interface: GigabitEthernet2
+      RTR2:
+        ansible_host: 192.168.0.202
+        hostname: "wss2023-rtr2"
+        loopback0_IP: 10.22.0.202
+        loopback0_MASK: 255.255.255.255
+        dhcp_relay_interface:
+          - interface: GigabitEthernet2
+      RTR3:
+        ansible_host: 192.168.0.203
+        hostname: "wss2023-rtr3"
+        loopback0_IP: 10.22.0.203
+        loopback0_MASK: 255.255.255.255
+        dhcp_relay_interface:
+          - interface: GigabitEthernet2
+      RTR4:
+        ansible_host: 192.168.0.204
+        hostname: "wss2023-rtr4"
+        loopback0_IP: 10.22.0.204
+        loopback0_MASK: 255.255.255.255
+        dhcp_relay_interface:
+          - interface: GigabitEthernet2
+  children:
+    linux:
+      children:
+        web:
+          hosts:
+            LIN1:
+            LIN3:
+          vars:
+            webport: "8000"
+        ha:
+          hosts:
+            LIN3:
+            LIN1:
+            LIN2:
+        dns:
+          hosts:
+            LIN2:
+            LIN3:
+            LIN1:
+        backup:
+          hosts:
+            LIN1:
+        nfs:
+          vars:
+            shares:
+              - name: finance
+                size: 100M
+              - name: hr
+                size: 200M
+          hosts:
+            LIN2:
+    windows:
+      vars:
+        ansible_connection: winrm
+        ansible_port: 5985
+      children:
+        dc:
+          hosts:
+            WIN1:
+        iis:
+          hosts:
+            WIN1:
+            WIN2:
+            WIN3:
+    cisco:
+      children:
+        internal:
+          hosts:
+            RTR1:
+            RTR2:
+            RTR3:
+            RTR4:
+      

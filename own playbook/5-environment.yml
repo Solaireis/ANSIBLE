@@ -1,0 +1,300 @@
+- name: Playbook to install the domain environment
+  hosts: windows
+  gather_facts: no
+  vars: 
+    - dc_first_host: '{{ groups [["dc"][0]][0]}}'
+  
+  tasks: 
+   - name: check if task is already done for win1
+     win_stat:
+       path: C:\win1.cer
+     register: result0
+      
+   - name: install IIS Service
+     win_feature:
+       name: web-server
+       state: present 
+       include_management_tools: yes
+     when: (' "iis" in group_names') and (not result0.stat.exists) 
+ 
+   - name: Set Local User Password Policy
+     win_shell: |
+       Set-LocalUser -Name 'administrator' -PasswordNeverExpires $true
+     when: (not result0.stat.exists)
+   - name: Install ADDS
+     block:
+      - win_feature:
+           name: ad-domain-services
+           state: present
+           restart: True
+           include_management_tools: yes
+      - win_domain:
+           dns_domain_name: customers.com
+           safe_mode_password: '{{ansible_password}}'
+        register: domain_state
+
+      - win_reboot:
+           pre_reboot_delay: 10
+        when: domain_state.reboot_required
+     when: (inventory_hostname == dc_first_host) and (not result0.stat.exists)
+
+   - pause:
+       minutes: 7
+       prompt: 'Waiting for finishing AD Forest Installtion...'
+     when: (hostvars[dc_first_host]['domain_state']['reboot_required']) or (not result0.stat.exists)
+     ignore_errors: true
+      
+   - name: Join the domain
+     block:
+       - win_shell: |
+           Set-DnsClientServerAddress -ServerAddress {{hostvars[dc_first_host]['ansible_host'] }} -InterfaceAlias Ethernet0
+       - win_domain_membership:
+           dns_domain_name: customers.com
+           domain_admin_user: administrator@customers.com
+           domain_admin_password: '{{ansible_password}}'
+           state: domain
+         register: domain_state
+       - win_reboot:
+           pre_reboot_delay: 10
+         when: domain_state.reboot_required
+     when: (inventory_hostname != dc_first_host) and (not result0.stat.exists)
+  
+  
+ 
+   - name: check if task is already done for win1
+     win_stat:
+       path: C:\web1
+     register: result1
+      
+   
+   - name: check if task is already done for win2
+     win_stat:
+        path: C:\web2
+     register: result2
+       
+   
+   - name: check if task is already done for win3
+     win_stat:
+       path: C:\web3
+     register: result3
+      
+   
+   - name: Create A Record for web1
+     block: 
+       - set_fact:
+          iis_host: '{{groups[["iis"][0]][0]}}'
+       - win_dns_record:
+           name: 'web1'
+           type: 'A'
+           value: '192.168.0.101'
+           zone: 'customers.com'
+     when: (inventory_hostname == dc_first_host) and (not result1.stat.exists)
+
+   - name: Create A Record for web2
+     block: 
+      - set_fact:
+         iis_host: '{{groups[["iis"][0]][1]}}'
+      - win_dns_record:
+           name: 'web2'
+           type: 'A'
+           value: '192.168.0.102'
+           zone: 'customers.com'
+     when: (inventory_hostname == dc_first_host) and (not result1.stat.exists)
+
+   - name: Create A Record for web3
+     block: 
+     - set_fact:
+         iis_host: '{{groups[["iis"][0]][2]}}'
+     - win_dns_record:
+         name: 'web3'
+         type: 'A'
+         value: '192.168.0.103'
+         zone: 'customers.com'
+     when: (inventory_hostname == dc_first_host) and (not result1.stat.exists)
+
+   - name: Configure IIS Site web1
+     block:
+      - win_shell: |
+         mkdir 'C:\web1'
+         Set-Content -Value '<h1> Welcome to {{hostname}} Server</h1>' -Path 'C:\web1\index.html'
+        failed_when: false
+      - win_iis_website:
+         name: 'web1.customers.com'
+         port: 80
+         ip: '192.168.0.101'
+         hostname: 'web1.customers.com'
+         physical_path: 'C:\web1'
+         state: started
+     when: (inventory_hostname == dc_first_host) and (not result1.stat.exists)
+     
+
+   - name: Configure IIS Site web2
+     block:
+       - win_shell: |
+          mkdir 'C:\web2' 
+          Set-Content -Value '<h1> Welcome to {{hostname}} Server</h1>' -Path 'C:\web2\index.html'
+         failed_when: false
+       - win_iis_website:
+          name: 'web2.customers.com'
+          port: 80
+          ip: '192.168.0.102'
+          hostname: 'web2.customers.com'
+          physical_path: 'C:\web2'
+          state: started
+     when: (inventory_hostname == "WIN2") and (not result2.stat.exists)
+
+ 
+   - name: Configure IIS Site web3
+     block:
+      - win_shell: |
+          mkdir 'C:\web3'
+          Set-Content -Value '<h1> Welcome to {{hostname}} Server</h1>' -Path 'C:\web3\index.html'
+        failed_when: false
+      - win_iis_website:
+           name: 'web3.customers.com'
+           port: 80
+           ip: '192.168.0.103'
+           hostname: 'web3.customers.com'
+           physical_path: 'C:\web3'
+           state: started
+     when: (inventory_hostname == "WIN3") and (not result3.stat.exists)
+
+   - name: Configure IIS HTTPS web2 
+     block:
+       - win_shell: |      
+            $Cert = New-SelfSignedCertificate   -dnsName web2.customers.com  -CertStoreLocation cert:\LocalMachine\My  -KeyLength 2048  -NotAfter (Get-Date).AddYears(1) 
+            $x509 = 'System.Security.Cryptography.X509Certificates.X509Store'
+            $Store = New-Object -TypeName $x509   -ArgumentList 'Root', 'LocalMachine' 
+           
+            $Store.Open('ReadWrite')
+            $Store.Add($Cert)
+            $Store.Close()
+
+            Get-WebBinding -Port 80 -Name "web2.customers.com" | remove-webbinding
+
+            New-WebBinding  -Name "web2.customers.com" -protocol https  -port 443  -IPAddress "192.168.0.102" -HostHeader "web2.customers.com" 
+
+            $Cert | New-Item `
+             -path IIS:\SslBindings\192.168.0.102!443
+            Export-Certificate -Cert $Cert -FilePath "C:\win2.cer"
+       - win_feature:
+           name: Web-Http-Redirect
+           state: present
+       - win_shell: | 
+            import-module webAdministration
+            $siteName = "Default Web Site"
+            $redirectPage = "https://web2.customers.com/"
+            Set-WebConfiguration system.webServer/httpRedirect "IIS:\sites\$siteName" -Value @{enabled="true";destination="$redirectPage";exactDestination="true";httpResponseStatus="Found"}
+     when: (inventory_hostname == "WIN2") and (not result2.stat.exists)
+     
+   - name: Configure IIS HTTPS web1
+     block:
+      - win_shell: |      
+            $Cert = New-SelfSignedCertificate   -dnsName "web1.customers.com"  -CertStoreLocation cert:\LocalMachine\My  -KeyLength 2048  -NotAfter (Get-Date).AddYears(1) 
+            $x509 = 'System.Security.Cryptography.X509Certificates.X509Store'
+            $Store = New-Object -TypeName $x509   -ArgumentList 'Root', 'LocalMachine' 
+           
+            $Store.Open('ReadWrite')
+            $Store.Add($Cert)
+            $Store.Close()
+
+            Get-WebBinding -Port 80 -Name "web1.customers.com" | remove-webbinding
+
+            New-WebBinding  -Name "web1.customers.com" -protocol https  -port 443  -IPAddress "192.168.0.101" -HostHeader "web1.customers.com" 
+
+            $Cert | New-Item `
+             -path IIS:\SslBindings\192.168.0.101!443
+            Export-Certificate -Cert $Cert -FilePath "C:\win1.cer"
+
+      - win_feature:
+         name: Web-Http-Redirect
+         state: present
+      - win_shell: | 
+            import-module webAdministration
+            $siteName = "Default Web Site"
+            $redirectPage = "https://web1.customers.com/"
+            Set-WebConfiguration system.webServer/httpRedirect "IIS:\sites\$siteName" -Value @{enabled="true";destination="$redirectPage";exactDestination="true";httpResponseStatus="Found"}
+     when: (inventory_hostname == "WIN1") and not (result1.stat.exists)    
+   - name: Configure IIS HTTPS web3
+     block:
+      - win_shell: |      
+            $Cert = New-SelfSignedCertificate   -dnsName "web3.customers.com"  -CertStoreLocation cert:\LocalMachine\My  -KeyLength 2048  -NotAfter (Get-Date).AddYears(1) 
+            $x509 = 'System.Security.Cryptography.X509Certificates.X509Store'
+            $Store = New-Object -TypeName $x509   -ArgumentList 'Root', 'LocalMachine' 
+           
+            $Store.Open('ReadWrite')
+            $Store.Add($Cert)
+            $Store.Close()
+
+            Get-WebBinding -Port 80 -Name "web3.customers.com" | remove-webbinding
+
+            New-WebBinding  -Name "web3.customers.com" -protocol https  -port 443  -IPAddress "192.168.0.103" -HostHeader "web3.customers.com" 
+
+            $Cert | New-Item `
+             -path IIS:\SslBindings\192.168.0.103!443
+            Export-Certificate -Cert $Cert -FilePath "C:\win3.cer"
+      - win_feature:
+         name: Web-Http-Redirect
+         state: present
+      - win_shell: | 
+            import-module webAdministration
+            $siteName = "Default Web Site"
+            $redirectPage = "https://web3.customers.com/"
+            Set-WebConfiguration system.webServer/httpRedirect "IIS:\sites\$siteName" -Value @{enabled="true";destination="$redirectPage";exactDestination="true";httpResponseStatus="Found"}
+     when: (inventory_hostname == "WIN3")  and (not result3.stat.exists) 
+   - name: Copy certs to HOST WIN1
+     fetch:
+      src: C:\win1.cer
+      dest: /data/ansible/windows/6/win1.cer
+      flat: yes
+     when: (inventory_hostname == "WIN1") and (not result1.stat.exists)
+
+   - name: Copy certs to HOST WIN2
+     fetch:
+        src: C:\win2.cer
+        dest: /data/ansible/windows/6/win2.cer
+        flat: yes
+     when: (inventory_hostname == "WIN2") and (not result2.stat.exists)
+
+   - name: Copy certs to HOST WIN3
+     fetch:
+        src: C:\win3.cer
+        dest: /data/ansible/windows/6/win3.cer
+        flat: yes
+     when: (inventory_hostname == "WIN3") and (not result3.stat.exists)
+   - name: check if cert have been installed before
+     win_stat:
+      path: C:/win1.cer
+     register: result4
+
+   - name: Send to all Windows Machiens to install cert WIN1
+     copy:
+       src: /data/ansible/windows/6/win1.cer
+       dest: C:/win1.cer
+     when: not result4.stat.exists
+
+   - name: Send to all Windows Machiens to install cert WIN2
+     copy:
+       src: /data/ansible/windows/6/win2.cer
+       dest: C:/win2.cer
+     when: not result4.stat.exists
+   - name: Send to all Windows Machiens to install cert WIN3
+     copy:
+       src: /data/ansible/windows/6/win3.cer
+       dest: C:/win3.cer
+     when: not result4.stat.exists
+
+   - name: Import Cert WIN1
+     win_shell: |
+       Import-Certificate -FilePath C:/win1.cer -CertStoreLocation Cert:\LocalMachine\Root\
+     when: not result4.stat.exists
+
+
+   - name: Import Cert WIN2
+     win_shell: |
+        Import-Certificate -FilePath C:/win2.cer -CertStoreLocation Cert:\LocalMachine\Root\
+     when: not result4.stat.exists
+   - name: Import Cert WIN3
+     win_shell: |
+        Import-Certificate -FilePath C:/win3.cer -CertStoreLocation Cert:\LocalMachine\Root\
+     when: not result4.stat.exists
