@@ -1,7 +1,8 @@
 # ANSIBLE
 
-If using this repository for learning use, please cite this repository as origin 
-Thank you!
+<p>If using this repository for learning use, please cite this repository as origin </p>
+<p> Thank you! </p>
+
 
 ## Credits
 - Yong En - Initial Linux playbooks & whole Python Programmability section
