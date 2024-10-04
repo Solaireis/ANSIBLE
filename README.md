@@ -16,7 +16,10 @@ WorldSkills Solution for Skill39 ITNSA WSC 2022 SE
 This is for self learning and education purposes, not for commercial use.
 Password use here are for learning purposes and are not indicative of actual real world machines
 
-Unarchived my optimised version, as i withdrawn from 2024 lyon ITNSA, these were my solution when i was in a proper mental health.
+as i withdrawn from 2024 lyon ITNSA in march 2024 & that the WSC2024 round has concluded.
+i have unarchived my optimised version.
+these were my solution when i was in a proper mental health training for lyon 2024 in 2023 and early 2024.
+
 
 ### How to Install
 ```bash
