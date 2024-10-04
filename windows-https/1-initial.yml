@@ -1,0 +1,61 @@
+- name: configure the local and windows machine to allow for cert auth
+   hosts: windows 127.0.0.1
+   gather_facts: no
+   tasks: 
+      - name: configure machine to allow powershell remoting
+        copy:
+          src: /data/ansible/windows/ConfigureRemotingForAnsible.ps1
+          dest: C:\Ansible.ps1
+        when: ( inventory_hostname != "127.0.0.1")
+      - name: execute the powershell remoting script
+        win_shell:
+          C:\Ansible.ps1
+        when: (inventory_hostname != "127.0.0.1")
+
+      - name: create ansible user
+        win_user:
+          name: ansible
+          password: '{{ansible_password}}'
+          state: present
+          password_never_expires: true
+          groups:
+            - administrators
+        ignore_errors: true
+        when: (inventory_hostname != "127.0.0.1")
+
+      - name: transfer the certificate 
+        copy:
+          src: /data/ansible/windows/2/{{item}}
+          dest: c:\{{item}}
+        loop:
+          - client.crt
+          - server.pfx
+        when: (inventory_hostname != "127.0.0.1")
+      
+      - name: Configure the ansible accounr for cert based authentication
+        win_shell: |
+          $user = "ansible"
+          $password = Convertto-securestring "{{ansible_password}}" -asplaintext -force
+          $credential = New-object -typename System.Management.Automation.PSCredential -Argumentlist $user, $password
+          $caroot = Import-certificate -filepath "C:\rootCA.crt" -certStoreLocation "Cert:\localmachine\Root"
+          $userkey = Import-certificate -Filepath "c:\client.crt" -certstorelocation "cert:\localmachine\trustedpeople" 
+          new-item -path WSMan:\localhost\ClientCertificate -subject "ansible@localhost" -URI "*" -Issuer $caroot.Thumbprint -Credential $credential -Force
+        ignore_errors: yes 
+        when: (inventory_hostname != "127.0.0.1")
+      
+      - name: create cert auth
+        win_shell:
+          set-item -path WSman:\localhost\service\auth\certificate -value $true
+        ignore_errors: yes
+        when: (inventory_hostname != "127.0.0.1")
+        
+      - name: Transfer New vault file
+        copy:
+          src: /data/ansible/windows/windows-cert
+          dest: /etc/ansible/group_vars/windows
+        when: (inventory_hostname == "127.0.0.1")
+
+      - name: Deny 5986 On Windows Clients
+        win_shell: 
+						New-NetFirewallRule -DisplayName "Ansible WinRM Insecure Channel" -Direction Inbound -Protocol "TCP" -LocalPort "5985" -Action block
+        when: (inventory_hostname != "127.0.0.1"

@@ -1,0 +1,17 @@
+- name: 3-loopback.yml
+  hosts: cisco
+  gather_facts: no
+  tasks:
+    - name: Create Loopback Interface
+      ios_interfaces:
+        config:
+          - name: Loopback0
+            description: 'WSS2023 Loopback Interface'
+          
+
+    - name: Assign IP Address to created Loopback interfaces
+      ios_l3_interfaces:
+        config:
+          - name: Loopback0
+            ipv4:
+              - address: '{{loopback0_IP}}/32'

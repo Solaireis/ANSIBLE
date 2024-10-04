@@ -1,0 +1,9 @@
+- name: 5-DHCPrelay.yml
+  hosts: cisco
+  gather_facts: no
+  tasks:
+    - name: Configure DHCP relay
+      ios_config:
+        lines:
+        - ip helper-address 192.168.200.254
+        parents: interface {{dhcp_relay_interface[0]["interface"]}}

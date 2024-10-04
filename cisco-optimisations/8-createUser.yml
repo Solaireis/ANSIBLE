@@ -1,0 +1,11 @@
+- name: 8-createUser.yml
+  hosts: cisco
+  gather_facts: no
+  tasks:
+    - name: Create local user account
+      cisco.ios.ios_user:
+        name: wssUser
+        privilege: 8
+        configured_password: P@ssw0rd
+        password_type: password
+        state: present

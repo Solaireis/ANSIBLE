@@ -1,0 +1,10 @@
+- name: jinja template for bind9
+  hosts: dns
+  vars: 
+    - dns_first_host: '{{groups["dns"][0]}}'
+  tasks: 
+    - name: transfer the dns zone files
+      template: 
+        src: /data/ansible/linux/test/wss2023.j2
+        dest: /etc/bind/wss2023.zone
+      when: hostname == hostvars[groups['dns'][0]]["hostname"]

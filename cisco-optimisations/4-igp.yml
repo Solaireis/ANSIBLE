@@ -1,0 +1,40 @@
+- name: 4-igp.yml
+  hosts: cisco
+  gather_facts: no
+  tasks:
+   
+    - name: Configure OSPF for 192.168.0.0 Network
+      cisco.ios.ios_ospfv2:
+        config:
+          processes:
+          - process_id: 1           
+            network:
+              - address: 192.168.0.0
+                wildcard_bits: 0.0.0.255
+                area: "0"
+
+    - name: Configure OSPF 2 10.22.0.0 Network 
+      cisco.ios.ios_ospfv2:
+        config:
+          processes:
+          - process_id: 1
+            network:
+              - address: 10.22.0.0
+                wildcard_bits: 0.0.0.255
+                area: "0"
+
+		- name: Enable OSPF on the interfaces
+      cisco.ios.ios_config:
+         lines: 
+           - ip ospf 1 area 0
+          parents: interface gigabitethernet2
+
+	  - name: Enable OSPF on the interfaces
+      cisco.ios.ios_config:
+         lines: 
+           - ip ospf 1 area 0
+          parents: interface loopback 0 
+
+    - name: save the config
+      ios_command:
+           commands: write memory

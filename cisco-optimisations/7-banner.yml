@@ -1,0 +1,9 @@
+- name: Create MOTD Banner
+  hosts: cisco
+  gather_facts: no
+  tasks:
+    - name: Configute banner
+      cisco.ios.ios_banner:
+        banner: motd
+        text: "{{lookup('file', '/data/ansible/cisco/banner.txt')}}"
+        state: present

@@ -1,0 +1,50 @@
+- name: push the certificates to the windows client
+  hosts: windows 127.0.0.1
+  tasks:
+    - name: configure machine to allow powershell remoting
+      copy:
+        src: /data/ansible/windows/ConfigureRemotingForAnsible.ps1
+        dest: c:\
+      when: 
+
+    - name: execute remoting script
+      win_shell:
+         C:\ConfigureRemotingForAnsible.ps1
+     
+    - name: create ansible user
+      win_user:
+        name: ansible
+	      password: '{{ansible_password}}'
+	      state: present
+	      password_never_expires: true
+	      groups:
+	       - administrators
+      ignore_errors: true
+    
+    - name: transfer the certificate
+      copy: 
+        src: /data/ansible/windows/2/{{item}}
+        dest: c:\{{item}}
+      loop:
+       - client.crt
+       - server.pfx
+    - name: Configure the Ansible Account for cert based authentication
+      win_shell: 
+					$password = ConvertTo-SecureString -string "P@ssw0rd" -AsPlainText -Force
+					$credential = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList "ansible" , $password
+					$caroot = Import-Certificate -FilePath ".\rootCA.crt" -CertStoreLocation "Cert:\LocalMachine\Root"
+					$userkey = Import-Certificate -FilePath "c:\client.crt" -CertStoreLocation "Cert:\LocalMachine\TrustedPeople"
+					New-Item -Path WSMan:\localhost\ClientCertificate -subject "ansible@localhost" -URI "*" -Issuer $caroot.Thumbprint -Credential $credential -Force
+					import-PFXcertificate -filepath C:\server.pfx -certstorelocation "cert:\localmachine\my" -password (convertto-securestring Skill39 -asplaintext -force)
+       ignore_errors: true
+
+     - name: create cert auth
+			 win_shell:
+			    Set-Item -Path WSMan:\localhost\Service\Auth\Certificate -value $true
+			 ignore_errors: true
+
+     - name: change the host machine to allow cert based authentication
+       copy: 
+         src: /data/ansible/windows/windows-cert
+         dest: /data/ansible/windows/windows
+       when: (inventory_hostname == "127.0.0.1")

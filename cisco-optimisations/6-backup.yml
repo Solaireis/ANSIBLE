@@ -1,0 +1,20 @@
+- hosts: cisco
+  gather_facts: no
+  tasks:
+    - name: Get Runnning Config
+      ios_command:
+        commands: show run 
+      register: result
+
+    - name: Save Config
+      copy:
+        content: '{{result.stdout[0]}}'
+        dest: '/data/ansible/cisco/{{hostname}}_{{ansible_host}}.cfg'
+      changed_when: False
+
+    - name: backup the files
+      shell: |
+         date=`date '+%Y-%b-%d'`
+         time=`date '+%H:%M'`
+         mkdir -p -- /data/ansible/cisco/"$date"_at_"$time"
+         mv {{hostname}}_{{ansible_host}}.cfg /data/ansible/cisco/"$date"_at_"$time"
