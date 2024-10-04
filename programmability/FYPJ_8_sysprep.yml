@@ -1,0 +1,33 @@
+- name: FYPJ-1-VMCloning.yml
+  hosts: WIN2 WIN3
+  gather_facts: no
+  connection: winrm
+    
+  tasks:
+    - name: Copy unattend.xml to destination
+      copy:
+        src: /data/ansible/unattend.xml
+        dest: C:\unattend.xml
+
+    - name: Perform Sysprep
+      win_shell:
+         C:\Windows\System32\Sysprep\sysprep.exe /reboot /generalize /oobe /unattend:C:\unattend.xml
+      ignore_errors: yes
+
+    - name: Pause for 5 mins
+      pause:
+        minutes: 5
+    
+    - name: Copy PsGetsid.exe over to remote machines
+      copy:
+        src: /root/PsGetsid.exe
+        dest: C:\Users\Administrator\PsGetsid.exe
+
+
+  vars:
+    ansible_user: administrator
+    ansible_password: P@ssw0rd
+    ansible_port: 5985
+    ansible_connection: winrm
+    ansible_winrm_server_cert_validation: ignore
+    ansible_winrm_transport: ntlm
