@@ -4,8 +4,10 @@ If using this repository for learning use, please cite this repository as origin
 Thank you!
 
 ## Credits
-Lim Yong En - Linux & Python Programmability 
-Lecturers - for Guidance and support
+- Yong En - Initial Linux playbooks & whole Python Programmability section
+
+- Lecturers - for Guidance and support
+
 
 ## NOTE:
 WorldSkills Solution for Skill39 ITNSA WSC 2022 SE 
