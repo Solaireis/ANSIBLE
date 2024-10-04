@@ -1,0 +1,84 @@
+- name: Create the users and DNS entries
+  hosts: windows
+  gather_facts: no
+  vars: 
+    - dc_first_host: '{{groups[["dc"][0]][0]}}'
+    - user_list: '{{ lookup("file", "/etc/ansible/users.json") | from_json}}'
+	  - iis_sites:
+        - { name: 'web1', host: 'WIN1', ip: '192.168.0.101' }
+        - { name: 'web2', host: 'WIN2', ip: '192.168.0.102' }
+        - { name: 'web3', host: 'WIN3', ip: '192.168.0.103' }
+	  
+  tasks:
+    - name: Create AD Object
+      block:
+       - win_shell: |
+          New-ADOrganizationalUnit -Name '{{item["name"]}}'
+          New-ADUser -Name '{{item["username"]}}' -AccountPassword (ConvertTo-SecureString {{item["password"]}} -AsPlainText -Force) -Path 'OU={{item["name"]}},DC=customers,DC=com' -UserPrincipalName {{item["username"]}}@customers.com -Surname {{item["name"].split(' ')[-1]}} -Enable 1
+         with_items: '{{user_list}}'
+         failed_when: False
+      when: (inventory_hostname == dc_first_host) 
+
+    - name: create A Records for Web Servers
+		  win_dns_record:
+		        name: '{{item.name}}'
+		        type: 'A'
+		        value: '{{item.ip}}'
+		        zone: 'customers.com'
+		      loop: '{{ iis_site }}'
+		   when: (inventory_hostname == dc_first_host) and (not result1.stat.exists)
+	
+	  - name: Create web directory
+	    win_shell: |
+	      mkdir 'C:\{{ item.name }}'
+	    loop: "{{ iis_sites }}"
+	    when: inventory_hostname == item.host
+	    ignore_errors: true
+	
+	  - name: Create index 
+	    win_shell: |
+	      Set-Content -Value '<h1> Welcome to {{ inventory_hostname }} Server</h1>' -Path 'C:\{{ item.name }}\index.html'
+	    loop: "{{ iis_sites }}"
+	    when: inventory_hostname == item.host
+	
+	  - name: Configure IIS website
+	    win_iis_website:
+	      name: '{{ item.name }}.customers.com'
+	      port: 80
+	      ip: '{{ item.ip }}'
+	      hostname: '{{ item.name }}.customers.com'
+	      physical_path: 'C:\{{ item.name }}\'
+	      state: started
+	    loop: "{{ iis_sites }}"
+	    when: inventory_hostname == item.host
+
+		- name: import certificate
+		  block: 
+		     - copy:
+		        src: /data/ansible/windows/5/common.pfx
+		        dest: C:\rootCA.pfx
+		   - win_shell: |
+		       import-pfxcertificate -filepath C:\common.pfx -certstorelocation Cert:\LocalMachine\My\ -password (convertto-securestring {{pfx_password}} -asplaintext -force)
+		  
+		- name: Configure IIS HTTPS
+		   win_shell: |  
+		      Get-WebBinding -Port 80 -Name "{{ item.name }}.customers.com" | remove-webbinding
+		      New-WebBinding  -Name "{{ item.name }}.customers.com" -protocol https  -port 443  -IPAddress "{{ item.ip }}" -HostHeader "{{ item.name }}.customers.com" 
+		      $cert = (get-childitem -path cert:\localmachine\my\ | where-object {$_subject -like "CN=*customers*"}).thumbprint
+		      get-item cert:\localmachine\my\$cert  | new-item -path IIS:\SslBindings\{{ item.ip }}!443 
+		   loop: '{{ iis_site }}
+		   when: inventory_hostname == item.host
+		
+		 - name: install Http Redirect Module
+		   win_feature:
+		    name: Web-Http-Redirect
+		    state: present
+		
+		 - name: redirect the http request
+			 win_shell: | 
+		        import-module webAdministration
+		        $siteName = "Default Web Site"
+		        $redirectPage = "https://{{ item.name }}.customers.com/"
+		        Set-WebConfiguration system.webServer/httpRedirect "IIS:\sites\$siteName" -Value @{enabled="true";destination="$redirectPage";exactDestination="true";httpResponseStatus="Found"}
+		   loop: '{{ iis_site }}
+		   when: inventory_hostname == item.host

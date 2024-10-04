@@ -1,0 +1,123 @@
+ - name: Playbook to configure domain environment
+   hosts: windows
+   gather_facts: no
+   vars:
+     - dc_first_host: '{{groups[["dc"][0]][0]}}'
+     - iis_sites:
+         - { name: 'web1', host: 'WIN1', ip: '192.168.0.101' }
+         - { name: 'web2', host: 'WIN2', ip: '192.168.0.102' } 
+         - { name: 'web3', host: 'WIN3', ip: '192.168.0.103' }
+   tasks: 
+    - name: install iis service
+      win_feature: 
+         name: web-server
+         state: present
+         include_management_tools: yes
+      when: ('"iis" in group_names')
+     
+    - name: Set Local user password policy
+      win_shell: |
+        set-localuser -name 'administrator' -passwordneverexpires $true
+
+    - name: install ADDS
+      block:
+        - win_feature:
+            name: ad-domain-services
+            state: present
+            include_management_tools: yes
+        - win_domain: 
+            dns_domain_name: customers.com
+            safe_mode_password: '{{ansible_password}}'
+          register: domain_state
+        - win_reboot:
+            pre_reboot_delay: 10
+          when: domain_state.reboot_required
+      when: (inventory_hostname == dc_first_host)
+    - pause:
+        minutes: 5
+        prompt: 'Waiting for finishing AD Forest Installation...'
+      when: (hostvars[dc_first_host]['domain_state']['reboot_required'])
+      ignore_errors: true
+
+    - name: Join the domain 
+      block:
+        - win_shell: | 
+           set-DnsclientServerAddress -serveraddress {{hostvars[dc_first_host]['ansible_host']}} -InterfaceAlias Ethernet0
+        - win_domain_membership:
+            dns_domain_name: customers.com
+            domain_admin_user: administrator@customers.com
+            domain_admin_password: '{{ansible_password}}'
+            state: domain
+          register: domain_state
+        - win_reboot:
+            pre_reboot_delay: 10
+          when: domain_state.reboot_required
+      when: (inventory_hostname != dc_first_host)
+
+    - name: create A records for the webservers
+      win_dns_record:
+        name: '{{item.name}}'
+        type: 'A'
+        value: '{{item.ip}}'
+        zone: 'customers.com'
+      loop: '{{ iis_sites }}'
+      when: (inventory_hostname == dc_first_host)
+
+    - name: create web directory
+      win_shell: |
+        mkdir 'C:\{{ item.name }}'
+      loop: '{{ iis_sites }}'
+      when: inventory_hostname == item.host
+      ignore_errors: true
+
+    - name: create index
+      win_shell: |
+        set-content -value '<h1> Welcome to {{inventory_hostname}} Server </h1>' -path 'C:\{{ item.name}}\index.html'
+      loop: '{{ iis_sites }}'
+      when: inventory_hostname == item.host
+
+    - name: configure IIS website
+      win_iis_website:
+        name: '{{ item.name }}.customers.com'
+        port: 80
+        ip: '{{ item.ip}}'
+        hostname: '{{ item.name }}.customers.com'
+        physical_path: 'C:\{{ item.name }}'
+        state: started
+      loop: "{{ iis_sites }}"
+      when: inventory_hostname == item.host
+
+    - name: import certificate
+      block: 
+        - copy: 
+            src: /data/ansible/windows/5/common.pfx
+            dest: c:\common.pfx
+        - win_shell: |
+           import-pfxcertificate -filepath C:\common.pfx -certstorelocation cert:\LocalMachine\My -password (convertto-securestring {{pfx_password}} -asplaintext -force)
+      when: '"iis" in group_names'
+
+    - name: configure iis https
+      win_shell: |
+        get-webbinding -port 80 -name "{{item.name}}.customers.com" | remove-webbinding
+        new-webbinding -name "{{item.name}}.customers.com" -protocol https -port 443 -ipaddress "{{item.ip}}" -hostheader "{{item.name}}.customers.com"
+        $cert = (get-childitem -path cert:\localmachine\my\ | where-object {$_.subject -like "CN=*customers*"}).thumbprint
+        get-item cert:\localmachine\my\$cert | new-item -path IIS:\sslbindings\{{ item.ip }}!443
+      loop: '{{iis_sites }}'
+      when: inventory_hostname == item.host
+      ignore_errors: yes
+
+    - name: install http redirect module
+      win_feature: 
+       name: web-http-redirect
+       state: present
+
+    - name: redirect the http request
+      win_shell: |
+        import-module webadministration
+        $siteName = "Default Web Site"
+        $redirectPage = "https://{{ item.name }}.customers.com/"
+        Set-webconfiguration system.webserver/httpRedirect "IIS:\sites\$siteName" -value @{enabled="true";destination="$redirectPage";exactDestination="true";httpResponseStatus="Found"}
+      loop: '{{ iis_sites }}'
+      when: inventory_hostname == item.host
+
+
