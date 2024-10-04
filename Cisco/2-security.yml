@@ -1,0 +1,27 @@
+- name: 2-security.yml
+  hosts: cisco
+  gather_facts: no
+  tasks:
+    - name: Create ACL
+      ios_config:
+        lines:
+          - permit tcp host 192.168.0.50 any eq 22
+          - permit tcp host 192.168.0.251 any eq 22
+          - permit icmp host 192.168.0.50 any
+          - permit icmp host 192.168.0.251 any
+          - permit tcp host 192.168.0.50  any eq 443
+          - permit tcp host 192.168.0.251 any eq 443
+          - permit ospf any any
+        parents: ip access-list extended acl-management
+      changed_when: False
+
+    - name: Apply ACL 
+      ios_config:
+        lines:
+          - ip access-group acl-management in
+        parents: int G0/2
+      changed_when: False
+    
+    - name: Save Configuration
+      ios_command:
+        commands: write memory    

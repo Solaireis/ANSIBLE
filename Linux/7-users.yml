@@ -1,0 +1,21 @@
+- name: configure the users
+  hosts: linux
+  gather_facts: false
+
+  tasks: 
+   - name: Create user list from csv
+     read_csv: 
+       path: /etc/ansible/users.csv
+       delimiter: ';'
+     register: user_list
+     delegate_to: localhost
+
+   - name: Import user list into remotre machine
+     user:
+       uid: '{{ item["uid"] }}'
+       name: '{{ item["username"] }}'
+       password: '{{ item["password"] | password_hash("sha512") }}'
+       home: '{{ item["home"] }}'
+       update_password: on_create
+     with_items: '{{ user_list["list"] }}'
+

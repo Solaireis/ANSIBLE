@@ -1,0 +1,16 @@
+- name:  Dns Client setup
+  hosts: linux
+  tasks:
+   - name: check if already setup
+     command:
+       cmd: grep "nameserver 192.168.0.10" /etc/resolv.conf
+     register: exists
+     ignore_errors: true
+
+   - name: enable client dns
+     copy:
+       src: /data/ansible/linux/resolv.conf
+       dest: /etc/resolv.conf
+     when: exists.rc != 0
+
+

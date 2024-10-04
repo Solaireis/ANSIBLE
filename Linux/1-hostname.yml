@@ -1,0 +1,9 @@
+- name: Hostname Change
+  hosts: linux
+ 
+  tasks:
+  - name: hostname
+    hostname:
+      name: '{{hostname}}'
+    when: ansible_hostname != hostname
+

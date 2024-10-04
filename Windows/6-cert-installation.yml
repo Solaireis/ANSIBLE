@@ -1,0 +1,51 @@
+- name: 6-cert-installation.yml
+  hosts: windows
+  gather_facts: no
+  tasks:
+    - name: Copy certs to HOST WIN1
+      fetch:
+        src: C:\win1.cer
+        dest: /data/ansible/windows/6/win1.cer
+        flat: yes
+      when: inventory_hostname == "WIN1"
+
+    - name: Copy certs to HOST WIN2
+      fetch:
+        src: C:\win2.cer
+        dest: /data/ansible/windows/6/win2.cer
+        flat: yes
+      when: inventory_hostname == "WIN2"
+
+    - name: Copy certs to HOST WIN3
+      fetch:
+        src: C:\win3.cer
+        dest: /data/ansible/windows/6/win3.cer
+        flat: yes
+      when: inventory_hostname == "WIN3"
+
+    - name: Send to all Windows Machiens to install cert WIN1
+      copy:
+        src: /data/ansible/windows/6/win1.cer
+        dest: C:/win1.cer
+
+    - name: Send to all Windows Machiens to install cert WIN2
+      copy:
+        src: /data/ansible/windows/6/win2.cer
+        dest: C:/win2.cer
+
+    - name: Send to all Windows Machiens to install cert WIN3
+      copy:
+        src: /data/ansible/windows/6/win3.cer
+        dest: C:/win3.cer
+
+    - name: Import Cert WIN1
+      win_shell: |
+        Import-Certificate -FilePath C:/win1.cer -CertStoreLocation Cert:\LocalMachine\Root\
+    
+    - name: Import Cert WIN2
+      win_shell: |
+        Import-Certificate -FilePath C:/win2.cer -CertStoreLocation Cert:\LocalMachine\Root\
+ 
+    - name: Import Cert WIN3
+      win_shell: |
+        Import-Certificate -FilePath C:/win3.cer -CertStoreLocation Cert:\LocalMachine\Root\

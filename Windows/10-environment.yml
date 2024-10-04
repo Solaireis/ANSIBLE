@@ -1,0 +1,74 @@
+- name: Playbook to install the domain environment
+  hosts: windows
+  gather_facts: no
+  vars: 
+    - dc_first_host: '{{ groups [["dc"][0]][0]}}'
+  
+  tasks: 
+   - name: install IIS Service
+     win_feature:
+       name: web-server
+       state: present
+       include_sub_features: True
+       include_management_tools: yes
+     when: ' "iis" in group_names'
+ 
+   - name: Set Local User Password Policy
+     win_shell: |
+       Set-LocalUser -Name 'administrator' -PasswordNeverExpires $true
+  
+   - name: Install ADDS
+     block:
+      - win_feature:
+           name: ad-domain-services
+           state: present
+           restart: True
+           include_sub_features: True
+           include_management_tools: yes
+      - win_domain:
+           dns_domain_name: customers.com
+           safe_mode_password: '{{ansible_password}}'
+        register: domain_state
+
+      - win_reboot:
+           pre_reboot_delay: 10
+        when: domain_state.reboot_required
+     when: inventory_hostname == dc_first_host
+
+   - pause:
+       minutes: 7
+       prompt: 'Waiting for finishing AD Forest Installtion...'
+     when: hostvars[dc_first_host]['domain_state']['reboot_required']
+   
+   - name: Join the domain
+     block:
+       - win_shell: |
+           Set-DnsClientServerAddress -ServerAddress {{hostvars[dc_first_host]['ansible_host'] }} -InterfaceAlias Ethernet0
+       - win_domain_membership:
+           dns_domain_name: customers.com
+           domain_admin_user: administrator@customers.com
+           domain_admin_password: '{{ansible_password}}'
+           state: domain
+         register: domain_state
+       - win_reboot:
+           pre_reboot_delay: 10
+         when: domain_state.reboot_required
+     when: inventory_hostname != dc_first_host
+  
+   - name: Install ADDS Domain Controller
+     block:
+       - win_feature: 
+           name: ad-domain-services
+           state: present
+           install_management_tools: yes
+       - win_domain_controller:
+           dns_domain_name: customers.com
+           domain_admin_user: administrator@customers.com
+           safe_mode_password: '{{ansible_password}}'
+           state: domain_controller
+         register: domain_state
+       - win_reboot:
+          pre_reboot_delay: 10
+         when: domain_state.reboot_required
+     when: ' "dc" in group_names and inventory_hostname != dc_first_host'   
+     

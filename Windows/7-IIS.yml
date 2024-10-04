@@ -1,0 +1,13 @@
+- name: Configure the iis security features for the windows machine
+  hosts: windows
+  gather_facts: no
+  tasks:
+    - name: install IIS with sub features
+      win_feature:
+        name: Web-Server
+        state: present
+        restart: True
+        include_sub_features: True
+        include_management_tools: True
+              
+    

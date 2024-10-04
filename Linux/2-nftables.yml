@@ -1,0 +1,78 @@
+- name: Filter incoming traffic on all LIN HOST
+  hosts: linux
+  gather_facts: false
+  tasks:
+  
+   - name: Check to see if nftables have been populated?
+     command: 
+       cmd: nft list table inet example
+     ignore_errors: true
+     register: result
+     changed_when: false
+
+   - name: copy nftables config to machine
+     copy:
+       src: /data/ansible/linux/nfTables/nftables.conf
+       dest: /etc/nftables.conf
+     when: result.rc != 0
+     changed_when: false
+   
+   - name: restart nftables service
+     shell: |
+       systemctl restart nftables
+       systemctl enable nftables
+     when: result.rc != 0
+     changed_when: false
+
+   - name: Special Handling for DNS
+     shell: |
+       nft add rule inet example example_chain udp dport 53 counter accept
+       nft add rule inet example example_chain tcp dport 53 counter accept
+     when: (' "dns" in group_names' ) and (result.rc != 0)
+     
+
+   - name: Special handling for webservers web port
+     shell: |
+       nft add rule inet example example_chain tcp dport {{ webport }} counter accept  
+     when: ( ' "web" in group_names') and (result.rc != 0)
+     changed_when: false
+     ignore_errors: true
+   
+   - name: Special handling for webservers web port 8081
+     shell: | 
+       nft add rule inet example example_chain ip saddr {{ hostvars[item]["ansible_host"] }} tcp dport 8081 counter accept
+     when: ( ' "web" in group_names') and (result.rc != 0) and (inventory_hostname != "LIN2")
+     with_items: '{{ groups[["ha"][0]] }}' 
+     changed_when: false
+     ignore_errors: true
+   
+   - name: special handling for HA Servers port 80
+     shell: |
+       nft add rule inet example example_chain tcp dport 80 counter accept 
+     when: (' "ha" in group_names') and (result.rc != 0)
+  
+   - name: special handling for HA Servers
+     shell: | 
+       nft add rule inet example example_chain ip saddr {{ hostvars[item]["ansible_host"] }} ip protocol vrrp counter accept
+     with_items: '{{ groups[["ha"][0]] }}'
+     when: (' "ha" in group_names') and (result.rc != 0)
+     
+   - name: special handling for nfs 
+     shell: |
+       nft add rule inet example example_chain tcp dport 2049 counter accept
+     when: (' "nfs" in group_names') and (result.rc != 0) and (inventory_hostname == "LIN2")
+     changed_when: false
+
+   - name: special handling for backup
+     shell: |
+       nft add rule inet example example_chain tcp dport 873 counter accept
+     when: ( ' "backup" in group_names') and (result.rc != 0) and ( inventory_hostname == "LIN1")
+     changed_when: false
+  
+   - name: make rules persistent
+     shell: |
+       nft list ruleset > /etc/nftables.conf 
+     changed_when: false
+
+    
+   

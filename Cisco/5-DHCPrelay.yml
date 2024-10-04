@@ -1,0 +1,25 @@
+- name: 5-DHCPrelay.yml
+  hosts: cisco
+  gather_facts: no
+  tasks:
+    - name: Push config file    
+      cisco.ios.ios_config:
+        src: /data/ansible/cisco/345-together/RTR1.cfg
+      when: inventory_hostname == "RTR1"
+    - name: Push config file    
+      cisco.ios.ios_config:
+        src: /data/ansible/cisco/345-together/RTR2.cfg
+      when: inventory_hostname == "RTR2"
+    - name: Push config file    
+      cisco.ios.ios_config:
+        src: /data/ansible/cisco/345-together/RTR3.cfg
+      when: inventory_hostname == "RTR3"
+    - name: Push config file    
+      cisco.ios.ios_config:
+        src: /data/ansible/cisco/345-together/RTR4.cfg
+      when: inventory_hostname == "RTR4"
+
+
+ 
+    - debug:
+        var: inventory_hostname 

@@ -1,0 +1,67 @@
+- name: Playbook that configures the DNS Server Backup
+  hosts: backup dns
+  gather_facts: false
+  vars:
+   - first_host: '{{ groups["dns"][0] }}'
+  
+  tasks:
+   
+   - name: check to see if dns backup has already been configured
+     command:
+      cmd: grep RSYNC_ENABLE=true /etc/default/rsync
+     register: result
+     ignore_errors: true
+     when: (' "backup" in group_names') 
+   
+   - name: install the rsync backup
+     apt:
+       name: rsync
+       state: present
+     when: (' "backup" in group_names') or (inventory_hostname == first_host)
+
+   - name: push the rsync configurations
+     copy: 
+      src: /data/ansible/linux/backup/rsyncd.conf
+      dest: /etc/rsyncd.conf
+     when: (' "backup" in group_names') and (result.rc != 0)
+   
+   - name: push the srync default configuration
+     copy:
+       src: /data/ansible/linux/backup/rsync
+       dest: /etc/default/rsync
+     when: (' "backup" in group_names' ) and (result.rc != 0)
+
+   - name: Restart the service
+     shell: | 
+      systemctl restart rsync
+     when: (' "backup" in group_names' ) and (result.rc != 0)
+
+   - name: make the backups directory
+     file:
+       path: /backups
+       state: directory
+     when: (' "backup" in group_names' ) and (result.rc != 0)
+
+   - name: Backup Master DNS files
+     block:
+       - copy:
+            src: /data/ansible/linux/backup/backup.sh
+            dest: /root/backup.sh
+            mode: a+x
+       - copy:
+            src: /data/ansible/linux/backup/backup.service
+            dest: /etc/systemd/system/backup.service
+       - copy: 
+            src: /data/ansible/linux/backup/backup.timer
+            dest: /etc/systemd/system/backup.timer
+       - lineinfile:
+            path: /root/backup.sh
+            insertafter: EOF
+            line: 'rsync -agz /backups/ rsync://{{hostvars[groups["backup"][0]]["ansible_host"] }}/backups'
+       - shell: |
+          systemctl restart backup.service
+          systemctl restart backup.timer
+          systemctl daemon-reload
+     when: (inventory_hostname == first_host) and (result.rc != 0)
+
+        

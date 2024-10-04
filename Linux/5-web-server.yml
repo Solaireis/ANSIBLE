@@ -1,0 +1,57 @@
+- name: webserver
+  hosts: web
+  tasks:
+   - name: Check
+     command:
+       cmd: grep {{webport}} /etc/apache2/ports.conf
+     register: result
+     ignore_errors: true
+
+   - name: install apache
+     apt:
+      name: apache2
+      state: present
+     when: result.rc != 0
+
+   - name: Push Config files
+     block: 
+      - copy:
+           src: /data/ansible/linux/apache/ports.conf
+           dest: /etc/apache2/ports.conf
+        
+      - copy: 
+           src: /data/ansible/linux/apache/000-default.conf
+           dest: /etc/apache2/sites-available/000-default.conf
+     
+      - copy:
+          src: '/data/ansible/linux/apache/{{item}}'
+          dest: /var/www/html/
+        loop:
+          - index.html
+          - intra.html
+
+      - lineinfile: 
+          path: /var/www/html/index.html 
+          regex: index 
+          line: '<h1 style=color:{{webcolor}}> hello from {{hostname}} </h1>'
+
+
+      - lineinfile:
+          path: /var/www/html/intra.html
+          regex: intra
+          line: '<p> This site was served by {{hostname}} </p>'
+      
+      - lineinfile:
+          path: /etc/apache2/sites-available/000-default.conf
+          regex: 8000
+          line: '<VirtualHost *:{{webport}}>'
+
+     when: result.rc != 0
+
+   - name: Restart Service
+     shell: | 
+      a2dissite *
+      systemctl reload apache2
+      a2ensite 000-default.conf
+      systemctl reload apache2
+

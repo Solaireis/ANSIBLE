@@ -1,0 +1,120 @@
+- name: Create NFS shares on host group nfs 
+  hosts: nfs
+  gather_facts: false
+  
+  tasks:
+    - name: check to see if NFS has already been configured
+      command:
+        cmd: 'grep 192.168.0.50 /etc/exports'
+      register: nfsDone
+      ignore_errors: true
+
+    - name: install NFS kernel package
+      apt:
+       name: nfs-kernel-server
+       state: present
+
+    - name: install lvm2 package
+      apt:
+       name: lvm2
+       state: present
+ 
+    - name: Check to see which sdX drive is the 1 gib due to kernel bug during mounting 
+      shell: |
+        fdisk -l | grep '1 GiB' | cut -c 6-13
+      register: pv_disk
+      ignore_errors: true
+
+    - name: print the pv_disk variable
+      debug:
+       msg: '{{pv_disk}}'
+      when: nfsDone.rc != 0
+   
+    - name: Check to see if pv has been created before
+      command:
+        cmd: pvdisplay {{ pv_disk.stdout }}
+      register: result
+      ignore_errors: true
+
+    - name: Create PV
+      command:
+         cmd: pvcreate {{ pv_disk.stdout }}
+      when: result.rc != 0
+       
+    - name: Check to see if vg nfs vg has been created before
+      command:
+       cmd: vgdisplay nfsvg
+      register: result
+      ignore_errors: true
+
+    - name: create vg
+      command:
+        cmd: vgcreate nfsvg {{ pv_disk.stdout }}
+      when: result.rc != 0
+
+    - name: check to see if first logical volume has been created before
+      shell: |
+       ls -d /dev/nfsvg
+      register: result
+      ignore_errors: true
+     
+    - name: create the lvs
+      shell: |
+        lvcreate --size {{item.size}} --name {{item.name}} nfsvg
+        mkfs.ext4 /dev/nfsvg/{{item.name}}
+      with_items: ' {{ shares }} '
+      ignore_errors: true
+      when: result.rc != 0
+
+    - name: create nfs directory
+      file:
+        path: /nfs
+        state: directory
+      when: nfsDone.rc != 0
+
+    - name: Create nfs individual mounting points 
+      file:
+        path: /nfs/{{item.name}}
+        state: directory
+      with_items: ' {{ shares }} '
+      when: nfsDone.rc != 0
+  
+    - name: check if fstab has been modified
+      command:
+        cmd: grep {{ shares[0]["name"] }} /etc/fstab
+      register: result  
+      ignore_errors: true
+
+    - name: modify fstab
+      lineinfile:
+        path: /etc/fstab
+        insertafter: EOF
+        line: "/dev/nfsvg/{{item.name}} /nfs/{{item.name}} ext4 defaults 0 0"
+      with_items: '{{ shares }}'
+      when: nfsDone.rc != 0
+   
+    - name: remount fstab
+      command:
+         cmd: mount -a
+      when: nfsDone.rc != 0
+  
+    - name: Check if /etc/exports has been modified
+      command:
+         cmd: grep {{shares[0]["name"] }} /etc/exports
+      register: result
+      ignore_errors: true
+       
+   
+    - name: Modify the /etc/exports
+      lineinfile: 
+        path: /etc/exports
+        insertafter: EOF
+        line: "/nfs/{{item.name}} 192.168.0.50(rw,sync,no_subtree_check) "
+      with_items: '{{ shares }}'
+      when: result.rc != 0
+     
+    - name: Restart nfs-kernal-server
+      shell: |
+        systemctl restart nfs-kernel-server
+        chown nobody:nogroup -R /nfs
+      when: nfsDone.rc != 0  

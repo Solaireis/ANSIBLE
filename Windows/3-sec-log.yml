@@ -1,0 +1,34 @@
+- name: Playbook for configuring the security settings for the windows hosts machine
+  hosts: windows
+  gather_facts: no
+  tasks:
+    - name: check if playbook has already been run
+      win_stat:
+        path: C:\uptime.ps1
+      register: configured
+
+    - name: Enable Remote Desktop to all Windows Hosts
+      win_service:
+         name: TermService
+         state: started
+         start_mode: auto
+         force_dependent_services: yes
+      when: not configured.stat.exists
+
+    - name: configure the task scheduler
+      block:
+        - copy:
+            src: /data/ansible/windows/3/uptime.ps1
+            dest: C:\uptime.ps1
+        - win_scheduled_task:
+            name: LogUpTime
+            logon_type: service_account
+            username: SYSTEM
+            actions:
+              - path: powershell
+                arguments: -ExecutionPolicy Unrestricted -WindowStyle Hidden -File C:\uptime.ps1
+            triggers:
+              - type: boot
+              - type: registration
+            state: present 
+      when: not configured.stat.exists

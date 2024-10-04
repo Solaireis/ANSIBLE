@@ -1,0 +1,72 @@
+- name: 3-dns-server
+  hosts: dns
+  vars:
+    - masterDNS: "{{ groups['dns'][0] }}"
+  
+  tasks:
+   - name: check if master config exists
+     stat:
+       path: /etc/bind/master.conf
+     register: master
+   
+   - name: Check if the slave config exists
+     stat:
+       path: /etc/bind/slave.conf
+     register: slave
+
+   - name: install bind9 services
+     apt:
+      name: bind9
+      state: present
+      
+   - name: send master files
+     copy:
+       src: '/data/ansible/linux/master/{{item}}'
+       dest: '/etc/bind'
+       owner: bind
+       group: bind
+       mode: 0777
+     loop:
+       - named.conf.options
+       - named.conf
+       - 0.168.192.db
+       - wss2023.zone
+       - master.conf
+     when: (masterDNS == inventory_hostname) and (not master.stat.exists)
+
+   - name: send master files
+     copy:
+       src: '/data/ansible/linux/master/{{item}}'
+       dest: '/var/cache/bind/'
+       owner: bind
+       group: bind
+       mode: 0777
+     loop:
+       - 0.168.192.db
+       - wss2023.zone
+     when: (masterDNS == inventory_hostname) and (not master.stat.exists)
+
+   - name: send slave files
+     copy:
+      src: '/data/ansible/linux/slave/{{item}}'
+      dest: '/etc/bind'
+      owner: bind
+      group: bind
+      mode: 0777
+     loop:
+       - slave.conf
+       - named.conf
+     when: (masterDNS != inventory_hostname) and (not slave.stat.exists)
+
+
+   - name: update Master bind configuration
+     shell: |
+       systemctl enable bind9
+       systemctl restart bind9
+     when: (masterDNS == inventory_hostname) and (not master.stat.exists)
+       
+   - name: update Slave bind configuration
+     shell: |
+       systemctl enable bind9
+       systemctl restart bind9
+     when: (masterDNS != inventory_hostname) and (not slave.stat.exists)

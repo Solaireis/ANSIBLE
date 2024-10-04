@@ -1,0 +1,26 @@
+- name: Certificates for the windows machine
+  hosts: windows
+  gather_facts: no
+  tasks: 
+     - name: check if certificates has already been configured
+       win_stat:
+         path: C:\rootCA.crt
+       register: configured
+         
+     - name: Install the root certificate
+       block:
+         - copy:
+              src: /data/ansible/windows/2/rootCA.crt
+              dest: C:\rootCA.crt
+         - win_shell: 
+             Import-Certificate -FilePath C:\rootCA.crt -CertStoreLocation Cert:\LocalMachine\Root\
+       when: (not configured.stat.exists)
+         
+     - name: Install root certificate with private key
+       block:
+         - copy:
+             src: /data/ansible/windows/2/rootCA.pfx
+             dest: C:\rootCA.pfx
+         - win_shell: |
+             Import-PfxCertificate -FilePath C:\rootCA.pfx -CertStoreLocation Cert:\LocalMachine\My\ -Password (ConvertTo-SecureString {{pfx_password}} -AsPlainText -Force)
+       when: (RootCAPriv == true) and (not configured.stat.exists)

@@ -1,0 +1,20 @@
+- hosts: cisco
+  gather_facts: no
+  tasks:
+    - name: Changing hostname
+      ios_system:
+        hostname: "{{hostname}}"
+      when: hostname is defined
+      register: result1
+
+    - name: Changing hostname
+      ios_system:
+        hostname: "{{inventory_hostname}}"
+      when: hostname is undefined
+      register: result2
+
+
+    - name: Save Configuration
+      ios_command:
+        commands: write memory
+      when: result1.changed or result2.changed

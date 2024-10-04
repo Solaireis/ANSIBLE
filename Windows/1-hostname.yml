@@ -1,0 +1,12 @@
+- name: set the hostname for the windows machine 
+  hosts: windows
+  gather_facts: no
+  tasks:
+    - name: Changing hostname
+      win_hostname: 
+        name: '{{hostname}}'
+      register: result
+    
+    - name: Reboot host
+      win_reboot:
+      when: result.changed

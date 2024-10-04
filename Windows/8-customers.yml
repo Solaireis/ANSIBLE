@@ -1,0 +1,247 @@
+- name: Create the users and DNS entries
+  hosts: windows
+  gather_facts: no
+  vars: 
+    - dc_first_host: '{{groups[["dc"][0]][0]}}'
+    - user_list: '{{ lookup("file", "/etc/ansible/users.json") | from_json}}'
+  
+  tasks:
+    - name: check if task is already done for win1
+      win_stat:
+         path: C:\web1
+      register: result1
+      
+   
+    - name: check if task is already done for win2
+      win_stat:
+         path: C:\web2
+      register: result2
+      
+   
+    - name: check if task is already done for win3
+      win_stat:
+         path: C:\web3
+      register: result3
+      
+    - name: Create AD Object
+      block:
+       - win_shell: |
+          New-ADOrganizationalUnit -Name '{{item["name"]}}'
+          New-ADUser -Name '{{item["username"]}}' -AccountPassword (ConvertTo-SecureString {{item["password"]}} -AsPlainText -Force) -Path 'OU={{item["name"]}},DC=customers,DC=com' -UserPrincipalName {{item["username"]}}@customers.com -Surname {{item["name"].split(' ')[-1]}} -Enable 1
+         with_items: '{{user_list}}'
+         failed_when: False
+      when: (inventory_hostname == dc_first_host) and (not result1.stat.exists)
+
+
+    - name: Create A Record for web1
+      block: 
+       - set_fact:
+          iis_host: '{{groups[["iis"][0]][0]}}'
+       - win_dns_record:
+           name: 'Web1'
+           type: 'A'
+           value: '192.168.0.101'
+           zone: 'customers.com'
+      when: inventory_hostname == dc_first_host
+
+    - name: Create A Record for web2
+      block: 
+       - set_fact:
+          iis_host: '{{groups[["iis"][0]][1]}}'
+       - win_dns_record:
+           name: 'Web2'
+           type: 'A'
+           value: '192.168.0.102'
+           zone: 'customers.com'
+      when: inventory_hostname == dc_first_host
+
+    - name: Create A Record for web3
+      block: 
+       - set_fact:
+          iis_host: '{{groups[["iis"][0]][2]}}'
+       - win_dns_record:
+           name: 'Web3'
+           type: 'A'
+           value: '192.168.0.103'
+           zone: 'customers.com'
+      when: inventory_hostname == dc_first_host
+
+    - name: Configure IIS Site web1
+      block:
+        - win_shell: |
+           mkdir 'C:\web1'
+           Set-Content -Value '<h1> Welcome to {{hostname}} Server</h1>' -Path 'C:\web1\index.html'
+          failed_when: false
+        - win_iis_website:
+            name: 'Web1.customers.com'
+            port: 80
+            ip: '192.168.0.101'
+            hostname: 'Web1.customers.com'
+            physical_path: 'C:\web1'
+            state: started
+      when: inventory_hostname == dc_first_host
+     
+
+    - name: Configure IIS Site web2
+      block:
+        - win_shell: |
+           mkdir 'C:\web2'
+           Set-Content -Value '<h1> Welcome to {{hostname}} Server</h1>' -Path 'C:\web2\index.html'
+          failed_when: false
+        - win_iis_website:
+            name: 'Web2.customers.com'
+            port: 80
+            ip: '192.168.0.102'
+            hostname: 'Web2.customers.com'
+            physical_path: 'C:\web2'
+            state: started
+      when: inventory_hostname == "WIN2"
+
+ 
+    - name: Configure IIS Site web3
+      block:
+        - win_shell: |
+           mkdir 'C:\web3'
+           Set-Content -Value '<h1> Welcome to {{hostname}} Server</h1>' -Path 'C:\web3\index.html'
+          failed_when: false
+        - win_iis_website:
+            name: 'Web3.customers.com'
+            port: 80
+            ip: '192.168.0.103'
+            hostname: 'Web3.customers.com'
+            physical_path: 'C:\web3'
+            state: started
+      when: inventory_hostname == "WIN3"
+
+    - name: Configure IIS HTTPS web2 
+      block:
+        - win_shell: |      
+            $Cert = New-SelfSignedCertificate   -dnsName "Web2.customers.com"  -CertStoreLocation cert:\LocalMachine\My  -KeyLength 2048  -NotAfter (Get-Date).AddYears(1) 
+            $x509 = 'System.Security.Cryptography.X509Certificates.X509Store'
+            $Store = New-Object -TypeName $x509   -ArgumentList 'Root', 'LocalMachine' 
+           
+            $Store.Open('ReadWrite')
+            $Store.Add($Cert)
+            $Store.Close()
+
+            Get-WebBinding -Port 80 -Name "web2.customers.com" | remove-webbinding
+
+            New-WebBinding  -Name "web2.customers.com" -protocol https  -port 443  -IPAddress "192.168.0.102" -HostHeader "web2.customers.com" 
+
+            $Cert | New-Item `
+             -path IIS:\SslBindings\192.168.0.102!443
+        - win_feature:
+           name: Web-Http-Redirect
+           state: present
+        - win_shell: | 
+            import-module webAdministration
+            $siteName = "Default Web Site"
+            $redirectPage = "https://web2.customers.com/"
+            Set-WebConfiguration system.webServer/httpRedirect "IIS:\sites\$siteName" -Value @{enabled="true";destination="$redirectPage";exactDestination="true";httpResponseStatus="Found"}
+      when: (inventory_hostname == "WIN2") and (not result2.stat.exists)
+     
+    - name: Configure IIS HTTPS web1
+      block:
+        - win_shell: |      
+            $Cert = New-SelfSignedCertificate   -dnsName "Web1.customers.com"  -CertStoreLocation cert:\LocalMachine\My  -KeyLength 2048  -NotAfter (Get-Date).AddYears(1) 
+            $x509 = 'System.Security.Cryptography.X509Certificates.X509Store'
+            $Store = New-Object -TypeName $x509   -ArgumentList 'Root', 'LocalMachine' 
+           
+            $Store.Open('ReadWrite')
+            $Store.Add($Cert)
+            $Store.Close()
+
+            Get-WebBinding -Port 80 -Name "web1.customers.com" | remove-webbinding
+
+            New-WebBinding  -Name "web1.customers.com" -protocol https  -port 443  -IPAddress "192.168.0.101" -HostHeader "web1.customers.com" 
+
+            $Cert | New-Item `
+             -path IIS:\SslBindings\192.168.0.101!443
+        - win_feature:
+           name: Web-Http-Redirect
+           state: present
+        - win_shell: | 
+            import-module webAdministration
+            $siteName = "Default Web Site"
+            $redirectPage = "https://web1.customers.com/"
+            Set-WebConfiguration system.webServer/httpRedirect "IIS:\sites\$siteName" -Value @{enabled="true";destination="$redirectPage";exactDestination="true";httpResponseStatus="Found"}
+      when: (inventory_hostname == "WIN1") and not (result1.stat.exists)    
+    - name: Configure IIS HTTPS web3
+      block:
+        - win_shell: |      
+            $Cert = New-SelfSignedCertificate   -dnsName "Web3.customers.com"  -CertStoreLocation cert:\LocalMachine\My  -KeyLength 2048  -NotAfter (Get-Date).AddYears(1) 
+            $x509 = 'System.Security.Cryptography.X509Certificates.X509Store'
+            $Store = New-Object -TypeName $x509   -ArgumentList 'Root', 'LocalMachine' 
+           
+            $Store.Open('ReadWrite')
+            $Store.Add($Cert)
+            $Store.Close()
+
+            Get-WebBinding -Port 80 -Name "web3.customers.com" | remove-webbinding
+
+            New-WebBinding  -Name "web3.customers.com" -protocol https  -port 443  -IPAddress "192.168.0.103" -HostHeader "web3.customers.com" 
+
+            $Cert | New-Item `
+             -path IIS:\SslBindings\192.168.0.103!443
+        - win_feature:
+           name: Web-Http-Redirect
+           state: present
+        - win_shell: | 
+            import-module webAdministration
+            $siteName = "Default Web Site"
+            $redirectPage = "https://web3.customers.com/"
+            Set-WebConfiguration system.webServer/httpRedirect "IIS:\sites\$siteName" -Value @{enabled="true";destination="$redirectPage";exactDestination="true";httpResponseStatus="Found"}
+      when: (inventory_hostname == "WIN3")  and (not result3.stat.exists)  
+
+    - name: Import the PFX Section
+      block:
+
+       - name: configure the pfx certificates for win1 the remote machines
+         copy: 
+           src: /data/ansible/windows/6/win1.pfx
+           dest: C:\win1.pfx
+       - name: configure the certificates for win2 remote machine
+         copy:
+           src: /data/ansible/windows/6/win2.cer
+           dest: C:\win2.pfx
+       - name: configure the certificate for win3 remote machine
+         copy:
+           src: /data/ansible/windows/6/win3.cer
+           dest: C:\win3.pfx
+       - name: Import Win1 pfxcert
+         win_shell: |
+               Import-PfxCertificate -FilePath C:\win1.pfx -CertStoreLocation Cert:\LocalMachine\Root -password (Convertto-SecureString {{pfx_password}} -AsPlainText -Force)
+       - name: Import win2 cert
+         win_shell: |
+               Import-PfxCertificate -FilePath C:\win2.pfx -CertStoreLocation Cert:\LocalMachine\Root -password (Convertto-SecureString {{pfx_password}} -AsPlainText -Force)
+       - name: import win3 cert
+         win_shell: |  
+               Import-PfxCertificate -FilePath C:\win3.pfx -CertStoreLocation Cert:\LocalMachine\Root -password (Convertto-SecureString {{pfx_password}} -AsPlainText -Force)
+    - name: update the ssl certificate to the new certificates
+      win_shell: |          
+            Get-WebBinding -Port 443 -Name "web1.customers.com" | remove-webbinding
+            New-WebBinding  -Name "web1.customers.com" -protocol https  -port 443  -IPAddress "192.168.0.101" -HostHeader "web1.customers.com" 
+            remove-item -path IIS:\SslBindings\192.168.0.101!443
+            $Cert = Import-PfxCertificate -FilePath C:\win1.pfx -CertStoreLocation Cert:\LocalMachine\Root\ -Password (ConvertTo-SecureString {{pfx_password}} -AsPlainText -Force)
+            $Cert | New-Item `
+             -path IIS:\SslBindings\192.168.0.101!443
+      when: (inventory_hostname == "WIN1")
+
+    - name: update the ssl certificate for win2
+      win_shell: | 
+            Get-WebBinding -Port 443 -Name "web2.customers.com" | remove-webbinding
+            New-WebBinding  -Name "web2.customers.com" -protocol https  -port 443  -IPAddress "192.168.0.102" -HostHeader "web1.customers.com" 
+            remove-item -path IIS:\SslBindings\192.168.0.102!443
+            $Cert = Import-PfxCertificate -FilePath C:\win2.pfx -CertStoreLocation Cert:\LocalMachine\Root\ -Password (ConvertTo-SecureString {{pfx_password}} -AsPlainText -Force)
+            $Cert | New-Item `
+             -path IIS:\SslBindings\192.168.0.102!443
+      when: (inventory_hostname == "WIN2")
+    - name: update the ssl certificate for win3
+      win_shell: | 
+            Get-WebBinding -Port 443 -Name "web3.customers.com" | remove-webbinding
+            New-WebBinding  -Name "web3.customers.com" -protocol https  -port 443  -IPAddress "192.168.0.103" -HostHeader "web1.customers.com" 
+            remove-item -path IIS:\SslBindings\192.168.0.103!443
+            $Cert = Import-PfxCertificate -FilePath C:\win3.pfx -CertStoreLocation Cert:\LocalMachine\Root\ -Password (ConvertTo-SecureString {{pfx_password}} -AsPlainText -Force)
+            $Cert | New-Item `
+             -path IIS:\SslBindings\192.168.0.103!443
+      when: (inventory_hostname == "WIN3")

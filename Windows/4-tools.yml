@@ -1,0 +1,17 @@
+- name: 4-tools.yml Installing Windows Tools Playbook
+  hosts: windows
+  gather_facts: no
+  tasks:
+    - name: Getting the installation type
+      win_shell: |
+        $a = Get-ComputerInfo
+        $a.WindowsInstallationType
+      register: installtype
+
+    - name: Install telnet Client
+      win_feature:
+        name: telnet-client
+        state: present
+        include_management_tools: yes
+      when: (installtype.stdout_lines[0] == 'Server' ) or (installtype.stdout_lines[0] == 'Server Core' )
+

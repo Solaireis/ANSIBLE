@@ -1,0 +1,8 @@
+- name: Configure the webservers for playbook 5
+  hosts: web
+  tasks:
+    - name: install the packages 
+      apt: 
+        name: apache2
+        state: present
+      

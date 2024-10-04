@@ -1,0 +1,20 @@
+- name: configure all the linux hosts using the local debian repository
+  hosts: linux
+  gather_facts: no
+  tasks:
+  - name: Check if the local debian repo has been configured before
+    command:
+       cmd: grep 192.168.0.251/ /etc/apt/sources.list
+    register: result
+    ignore_errors: true
+
+  - name: configure the local debian repository
+    copy: 
+     src: /etc/apt/sources.list
+     dest: /etc/apt/sources.list
+    when: result.rc != 0
+  
+  - name: update the repository
+    shell: |
+     apt update
+    when: result.rc != 0

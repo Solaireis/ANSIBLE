@@ -1,0 +1,91 @@
+- name: playbook 6 Ha-Proxy for two or more HA servers
+  hosts: ha
+  gather_facts: false
+  vars:
+    - last_host: '{{ groups [["ha"][0]][-1] }}'
+
+  tasks: 
+    - name: check if configured
+      command: 
+         cmd: 'grep "frontend http" /etc/haproxy/haproxy.cfg'
+      register: result
+      ignore_errors: yes
+
+    - name: Install HAproxy 
+      apt: 
+       name: haproxy
+       state: present
+      when: result.rc != 0
+    
+    - name: install keepalived
+      apt:
+        name: keepalived
+        state: present
+      when: result.rc != 0
+    
+    - name: push keepalived config
+      copy: 
+       src: /data/ansible/linux/haproxy/keepalived.conf
+       dest: /etc/keepalived/keepalived.conf
+      when: result.rc != 0
+    
+    - name: push ha proxy
+      copy:
+        src: /data/ansible/linux/haproxy/haproxy.cfg
+        dest: /etc/haproxy/haproxy.cfg
+      when: result.rc != 0
+
+    - name: Do the following tasks for the VRRP Master
+      lineinfile:
+        path: /etc/keepalived/keepalived.conf
+        insertafter: virtual_ipaddress
+        line: '    192.168.0.51/24'
+      when: (inventory_hostname == last_host) and (result.rc != 0)
+
+    - name: Do the following tasks for the slave 
+      block: 
+       - lineinfile:
+            path: /etc/keepalived/keepalived.conf
+            regex: MASTER
+            line: '     state BACKUP'
+
+       - lineinfile:
+            path: /etc/keepalived/keepalived.conf 
+            insertafter: virtual_ipaddress 
+            line: '    192.168.0.51/24'
+
+       - set_fact:
+            priority: "{{ 50+item.0 }}"
+         with_indexed_items: "{{ groups[['ha'][0]] }}"
+         when: item.1 == inventory_hostname
+          
+       - lineinfile:
+            path: /etc/keepalived/keepalived.conf
+            regex: priority
+            line: '    priority {{ priority }}'
+      when: (inventory_hostname != last_host) and (result.rc != 0)
+
+    - name: Insert the http response
+      lineinfile:
+         path: /etc/haproxy/haproxy.cfg
+         regex: hostname
+         line: "http-response add-header x-haproxy-host '{{ hostname }}'"
+      when: result.rc != 0
+
+    - name: Insert the web servers
+      lineinfile:
+        path: /etc/haproxy/haproxy.cfg
+        insertafter: EOF
+        line: '		 server {{ hostvars[item]["hostname"] }} {{hostvars[item]["ansible_host"] }}:8081'
+      with_items: '{{ groups[["web"][0]] }}'
+      when: result.rc != 0
+
+    - name: Restart Service
+      shell: |
+        systemctl restart keepalived
+        systemctl enable keepalived
+        systemctl restart haproxy
+        systemctl enable haproxy
+      
+    
+   
