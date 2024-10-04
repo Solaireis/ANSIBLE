@@ -25,12 +25,19 @@ aptitude install ansible
 # Make the hostfile directory
 mkdir /etc/ansible/
 vi hosts
-...
+
 
 # Add the  Playbooks
 mkdir -p /data/ansible/linux
 vi 1-hostname.yml
-...
+
+
+# to run the playbooks
+
+ansible-playbook 1-hostname.yml
+
+# to read docs
+ansible-doc
 
 ```
 You may refer to redhat for better documentation
