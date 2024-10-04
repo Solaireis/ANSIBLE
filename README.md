@@ -1,4 +1,9 @@
 # ANSIBLE
+
+If using this repository for learning use, please cite this repository as origin 
+Thank you!
+
+
 ## NOTE:
 WorldSkills Solution for Skill39 ITNSA WSC 2022 SE 
 
