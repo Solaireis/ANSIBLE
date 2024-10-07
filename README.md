@@ -12,6 +12,8 @@
 
 ## NOTE:
 WorldSkills Solution for Skill39 ITNSA WSC 2022 SE 
+This repo contains solutions that works for linux automations, windows automation and network automation systems.
+The network system is done on cisco modelling labs software using version 2.6 
 
 This is for self learning and education purposes, not for commercial use.
 Password use here are for learning purposes and are not indicative of actual real world machines
